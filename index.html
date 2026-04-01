@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Chapter Wise Quiz Platform</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <style>
+    :root {
+      --primary-color: #5c67f2; --secondary-color: #8f94fb; --accent-color: #ff6b6b;
+      --text-color: #2d3436; --bg-color: #f0f2f5; --white: #ffffff;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Poppins', sans-serif; margin: 0; background: var(--bg-color); display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    .container { width: 100%; max-width: 1000px; background: var(--white); min-height: 100vh; padding: 15px; box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); }
+    #nameInput { text-align: center; padding-top: 40px; }
+    h2 { color: var(--primary-color); margin-bottom: 20px; }
+    #studentName, #chapterSelect { width: 90%; max-width: 400px; padding: 14px; margin-bottom: 15px; border: 2px solid #edf2f7; border-radius: 12px; font-size: 16px; text-align: center; }
+    .start-btn { width: 90%; max-width: 400px; padding: 16px; background: var(--primary-color); color: white; border: none; border-radius: 12px; font-size: 18px; cursor: pointer; }
+    #testContainer { display: none; }
+    .top-bar { display: flex; justify-content: space-between; align-items: center; padding: 10px; }
+    #timer { font-size: 15px; font-weight: 600; color: var(--accent-color); background: #fff5f5; padding: 5px 12px; border-radius: 50px; }
+    #progressBar { width: 100%; background: #f1f3f5; height: 6px; border-radius: 10px; margin-bottom: 20px; overflow: hidden; }
+    #progressBar div { height: 100%; background: var(--primary-color); width: 0%; transition: 0.4s; }
+    .question { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: var(--text-color); }
+    .options { display: flex; flex-direction: column; gap: 12px; }
+    .option-label { display: flex; align-items: center; padding: 14px; border: 2px solid #f1f3f5; border-radius: 12px; cursor: pointer; background: #fff; }
+    .option-label.selected { border-color: var(--primary-color); background: #f0f3ff; }
+    .option-label input { display: none; }
+    .custom-radio { height: 20px; width: 20px; border: 2px solid #cbd5e0; border-radius: 50%; margin-right: 12px; display: flex; align-items: center; justify-content: center; }
+    .option-label.selected .custom-radio::after { content: ''; width: 10px; height: 10px; background: var(--primary-color); border-radius: 50%; }
+    .buttons { display: flex; justify-content: space-between; gap: 10px; margin-top: 30px; }
+    .nav-btn { flex: 1; padding: 15px; border-radius: 12px; border: none; font-weight: 600; cursor: pointer; }
+    .prev { background: #f1f3f5; }
+    .next { background: var(--primary-color); color: white; }
+    .summary-box { max-height: 250px; overflow-y: auto; text-align: left; background: #f8f9fa; padding: 10px; border-radius: 10px; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div id="nameInput">
+      <h2>Quiz Platform</h2>
+      <input type="text" id="studentName" placeholder="Enter Your Name">
+      <select id="chapterSelect"></select>
+      <button class="start-btn" onclick="startTest()">Start Test</button>
+    </div>
+
+    <div id="testContainer">
+      <div class="top-bar">
+        <span id="testTitle">Candidate</span>
+        <div id="timer">🕒 10:00</div>
+      </div>
+      <div id="progressBar"><div></div></div>
+      <div id="quiz"></div>
+      <div class="buttons">
+        <button id="prevBtn" class="nav-btn prev" onclick="previousQuestion()">Previous</button>
+        <button id="nextBtn" class="nav-btn next" onclick="handleNext()">Next</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // Yahan links ko sahi karein. 
+  // Link ke aakhir mein / nahi hona chahiye.
+  const chapterLinks = {
+    "History Chapter": "https://rahulkumarofficial.github.io/hitory.json",
+    "Physics Chapter": "physics.json" 
+  };
+
+  let activeQuestions = [];
+  let currentIdx = 0;
+  let userAns = [];
+  let timeLeft = 600;
+  let timerId = null;
+  let sName = "";
+
+  function init() {
+    const select = document.getElementById('chapterSelect');
+    Object.keys(chapterLinks).forEach(ch => {
+      let opt = document.createElement('option');
+      opt.value = ch; opt.innerHTML = ch;
+      select.appendChild(opt);
+    });
+  }
+  init();
+
+  async function startTest() {
+    sName = document.getElementById('studentName').value.trim();
+    let sel = document.getElementById('chapterSelect').value;
+    if(!sName) return Swal.fire('Error', 'Name likhein', 'warning');
+
+    Swal.fire({ title: 'Loading...', didOpen: () => Swal.showLoading() });
+
+    try {
+      const resp = await fetch(chapterLinks[sel]);
+      if(!resp.ok) throw new Error("File nahi mili ya link galat hai");
+      
+      activeQuestions = await resp.json();
+      userAns = new Array(activeQuestions.length).fill(null);
+      
+      Swal.close();
+      document.getElementById('nameInput').style.display = 'none';
+      document.getElementById('testContainer').style.display = 'block';
+      loadQuestion();
+      
+      timerId = setInterval(() => {
+        timeLeft--;
+        let m = Math.floor(timeLeft/60), s = timeLeft%60;
+        document.getElementById('timer').innerText = `🕒 ${m}:${s<10?'0':''}${s}`;
+        if(timeLeft <= 0) submitQuiz();
+      }, 1000);
+    } catch (e) {
+      Swal.fire('Failed', e.message, 'error');
+    }
+  }
+
+  function loadQuestion() {
+    const q = activeQuestions[currentIdx];
+    document.getElementById('quiz').innerHTML = `
+      <div class="question">${currentIdx+1}. ${q.question}</div>
+      <div class="options">
+        ${q.options.map(o => `
+          <label class="option-label ${userAns[currentIdx] === o ? 'selected' : ''}" onclick="saveAns('${o}', this)">
+            <input type="radio" name="opt" ${userAns[currentIdx] === o ? 'checked' : ''}>
+            <div class="custom-radio"></div><span>${o}</span>
+          </label>
+        `).join('')}
+      </div>
+    `;
+    document.getElementById('progressBar').firstElementChild.style.width = `${((currentIdx+1)/activeQuestions.length)*100}%`;
+    document.getElementById('nextBtn').innerText = currentIdx === activeQuestions.length - 1 ? 'Submit' : 'Next';
+  }
+
+  window.saveAns = (v, el) => {
+    userAns[currentIdx] = v;
+    document.querySelectorAll('.option-label').forEach(l => l.classList.remove('selected'));
+    el.classList.add('selected');
+  };
+
+  function handleNext() {
+    if(currentIdx < activeQuestions.length - 1) { currentIdx++; loadQuestion(); }
+    else { submitQuiz(); }
+  }
+
+  function previousQuestion() { if(currentIdx > 0) { currentIdx--; loadQuestion(); } }
+
+  function submitQuiz() {
+    clearInterval(timerId);
+    let score = 0;
+    activeQuestions.forEach((q, i) => { if(userAns[i] === q.answer) score++; });
+    Swal.fire('Done!', `Your Score: ${score} / ${activeQuestions.length}`, 'success').then(() => location.reload());
+  }
+</script>
+</body>
+</html>
